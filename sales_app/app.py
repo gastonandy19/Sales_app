@@ -235,5 +235,6 @@ def delete_sale(sale_id):
 
 
 if __name__ == "__main__":
-    # Run one clean Flask instance without the reloader to avoid stale state
-    app.run(debug=False, use_reloader=False)
+    import os
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
