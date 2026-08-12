@@ -233,7 +233,33 @@ def delete_sale(sale_id):
     save_sales(sales)
     return redirect(url_for("index"))
 
+@app.route("/edit/<int:sale_id>", methods=["POST"])
+def edit_sale(sale_id):
+    """Update an existing sale record (called via fetch from inline edit)."""
+    sale = next((s for s in sales if s["id"] == sale_id), None)
+    if sale is None:
+        return jsonify({"success": False, "message": "Sale not found."}), 404
 
+    product = request.form.get("product", "").strip().title()
+    quantity_raw = request.form.get("quantity", "")
+    price_raw = request.form.get("price", "")
+
+    if product == "" or quantity_raw == "" or price_raw == "":
+        return jsonify({"success": False, "message": "All fields are required."}), 400
+
+    try:
+        quantity = int(quantity_raw)
+        price = float(price_raw)
+    except ValueError:
+        return jsonify({"success": False, "message": "Quantity and price must be numbers."}), 400
+
+    sale["product"] = product
+    sale["quantity"] = quantity
+    sale["price"] = price
+    sale["total"] = calculate_total(quantity, price)
+    save_sales(sales)
+
+    return jsonify({"success": True, "sale": sale})
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))

@@ -46,7 +46,7 @@
         <!-- Table of recorded sales -->
         <h2>Today's Sales</h2>
         {% if sales %}
-        <table>
+        <table id="sales-table">
             <tr>
                 <th>#</th>
                 <th>Product</th>
@@ -56,13 +56,27 @@
                 <th></th>
             </tr>
             {% for sale in sales %}
-            <tr>
+            <tr data-id="{{ sale.id }}">
                 <td>{{ sale.id }}</td>
-                <td>{{ sale.product }}</td>
-                <td>{{ sale.quantity }}</td>
-                <td>{{ "%.2f"|format(sale.price) }}</td>
-                <td>{{ "%.2f"|format(sale.total) }}</td>
-                <td><a href="/delete/{{ sale.id }}" class="delete-link">Delete</a></td>
+                <td class="cell-product">
+                    <span class="view-value">{{ sale.product }}</span>
+                    <input type="text" class="edit-value edit-product" value="{{ sale.product }}" style="display:none;">
+                </td>
+                <td class="cell-quantity">
+                    <span class="view-value">{{ sale.quantity }}</span>
+                    <input type="number" class="edit-value edit-quantity" value="{{ sale.quantity }}" min="1" style="display:none;">
+                </td>
+                <td class="cell-price">
+                    <span class="view-value">{{ "%.2f"|format(sale.price) }}</span>
+                    <input type="number" class="edit-value edit-price" value="{{ sale.price }}" step="0.01" min="0" style="display:none;">
+                </td>
+                <td class="cell-total">{{ "%.2f"|format(sale.total) }}</td>
+                <td class="cell-actions">
+                    <a href="#" class="edit-link">Edit</a>
+                    <a href="#" class="save-link" style="display:none;">Save</a>
+                    <a href="#" class="cancel-link" style="display:none;">Cancel</a>
+                    <a href="/delete/{{ sale.id }}" class="delete-link">Delete</a>
+                </td>
             </tr>
             {% endfor %}
         </table>
@@ -116,11 +130,92 @@
             }
         }
 
+        function toggleRowEditMode(row, editing) {
+            row.querySelectorAll('.view-value').forEach(el => {
+                el.style.display = editing ? 'none' : '';
+            });
+            row.querySelectorAll('.edit-value').forEach(el => {
+                el.style.display = editing ? '' : 'none';
+            });
+            row.querySelector('.edit-link').style.display = editing ? 'none' : '';
+            row.querySelector('.save-link').style.display = editing ? '' : 'none';
+            row.querySelector('.cancel-link').style.display = editing ? '' : 'none';
+            row.querySelector('.delete-link').style.display = editing ? 'none' : '';
+        }
+
+        async function saveRow(row) {
+            const saleId = row.dataset.id;
+            const product = row.querySelector('.edit-product').value.trim();
+            const quantity = row.querySelector('.edit-quantity').value;
+            const price = row.querySelector('.edit-price').value;
+
+            if (!product || !quantity || !price) {
+                alert('All fields are required.');
+                return;
+            }
+
+            const formData = new URLSearchParams();
+            formData.append('product', product);
+            formData.append('quantity', quantity);
+            formData.append('price', price);
+
+            const response = await fetch(`/edit/${saleId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                // Update the row's displayed values and total from the server response
+                const sale = data.sale;
+                row.querySelector('.cell-product .view-value').textContent = sale.product;
+                row.querySelector('.cell-quantity .view-value').textContent = sale.quantity;
+                row.querySelector('.cell-price .view-value').textContent = sale.price.toFixed(2);
+                row.querySelector('.cell-total').textContent = sale.total.toFixed(2);
+
+                toggleRowEditMode(row, false);
+                await updateSummary();
+
+                // Reload once to refresh the day total footer (simplest reliable approach)
+                window.location.reload();
+            } else {
+                alert(data.message || 'Could not save changes.');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             updateSummary();
             setInterval(updateSummary, 3000);
             document.getElementById('download-report-btn').addEventListener('click', downloadReport);
             document.getElementById('reset-btn').addEventListener('click', resetDay);
+
+            document.querySelectorAll('#sales-table tr[data-id]').forEach(row => {
+                const editLink = row.querySelector('.edit-link');
+                const saveLink = row.querySelector('.save-link');
+                const cancelLink = row.querySelector('.cancel-link');
+
+                editLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    toggleRowEditMode(row, true);
+                });
+
+                cancelLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Reset inputs back to original view values
+                    row.querySelector('.edit-product').value = row.querySelector('.cell-product .view-value').textContent;
+                    row.querySelector('.edit-quantity').value = row.querySelector('.cell-quantity .view-value').textContent;
+                    row.querySelector('.edit-price').value = row.querySelector('.cell-price .view-value').textContent;
+                    toggleRowEditMode(row, false);
+                });
+
+                saveLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    saveRow(row);
+                });
+            });
         });
     </script>
 </body>
